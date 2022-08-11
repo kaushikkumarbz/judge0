@@ -105,14 +105,14 @@ class SubmissionsController < ApplicationController
     if submission.save
       if @wait
         begin
-          IsolateJob.perform_now(submission.id)
+          IsolateRunner.perform_now(submission)
           submission.reload
           render json: submission, status: :created, base64_encoded: @base64_encoded, fields: @requested_fields
         rescue Encoding::UndefinedConversionError => e
           render_conversion_error(:created, submission.token)
         end
       else
-        IsolateJob.perform_later(submission.id)
+        IsolateRunner.perform_later(submission)
         render json: submission, status: :created, fields: [:token]
       end
     else
@@ -143,7 +143,7 @@ class SubmissionsController < ApplicationController
 
     submissions.each do |submission|
       if submission.save
-        IsolateJob.perform_later(submission.id)
+        IsolateRunner.perform_later(submission)
         response << { token: submission.token }
         has_valid_submission = true
       else
@@ -218,7 +218,11 @@ class SubmissionsController < ApplicationController
   end
 
   def set_base64_encoded
-    @base64_encoded = params[:base64_encoded] == "true"
+    if Config::DISABLE_IMPLICIT_BASE64_ENCODING
+      @base64_encoded = params[:base64_encoded] == "true"
+    else
+      @base64_encoded = params[:base64_encoded] != "false"
+    end
   end
 
   def render_conversion_error(status, token = nil)
